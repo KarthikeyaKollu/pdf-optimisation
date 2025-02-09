@@ -6,6 +6,14 @@ import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import { List } from "react-virtualized";
 import { getPdfById } from "@/db/pdf/docs";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
+import { ExcalidrawElement } from "@excalidraw/excalidraw/types/element/types";
+import { AppState, ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types/types";
+
+const Excalidraw = dynamic(
+  () => import("@excalidraw/excalidraw").then((mod) => mod.Excalidraw),
+  { ssr: false }
+);
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs`;
 
@@ -25,6 +33,7 @@ const PDFViewer = ({ url }: { url: string }) => {
   const [pageHeight, setPageHeight] = useState<number>(900); // Default height
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<any>(null);
+  const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI>();
 
   // Callback for setting dynamic height
   const onLoadPageSuccess = useCallback((page) => {
@@ -32,17 +41,87 @@ const PDFViewer = ({ url }: { url: string }) => {
     setPageHeight(viewport.height + 10); // Add spacing
   }, []);
 
+  const initialAppState: AppState = {
+    zoom: { value: 1 },
+    scrollX: 0,
+    scrollY: 0,
+  };
+
+  const handleChange = (
+    elements: readonly ExcalidrawElement[],
+    state: AppState
+  ) => {
+    if (!excalidrawAPI) return;
+    let shouldUpdateScene = false;
+    const newAppState: Pick<AppState, keyof AppState> = { ...state };
+    const appstate = excalidrawAPI.getAppState();
+    // console.log(elements);
+
+    if (state.zoom.value !== initialAppState.zoom.value) {
+      newAppState.zoom = { value: initialAppState.zoom.value };
+      shouldUpdateScene = true;
+      console.log("should update")
+    }
+
+    if (state.scrollX !== initialAppState.scrollX) {
+      newAppState.scrollX = initialAppState.scrollX;
+      shouldUpdateScene = true;
+      console.log("should update")
+    }
+
+    if (state.scrollY !== initialAppState.scrollY) {
+      newAppState.scrollY = initialAppState.scrollY;
+      shouldUpdateScene = true;
+      console.log("should update")
+    }
+
+    if (shouldUpdateScene) {
+      excalidrawAPI.updateScene({
+        appState: {
+          ...appstate,
+          ...newAppState,
+        },
+      });
+    }
+  };
+
   const renderRow = useCallback(
     ({ index, key, style }) => (
-      <div key={key} style={{ ...style, display: "flex", justifyContent: "center", paddingBottom: "10px" }} className="relative">
+      <div
+        key={key}
+        style={{
+          ...style,
+          display: "flex",
+          justifyContent: "center",
+          paddingBottom: "10px",
+        }}
+        className="relative overflow-hidden  bg-black"
+      >
+        <div className="relative">
         <Page
           pageNumber={index + 1}
-          width={ 600}
+          width={600}
           renderAnnotationLayer={false}
           renderTextLayer={false}
           onLoadSuccess={onLoadPageSuccess} // Capture dynamic height
         />
-       
+        <div className="absolute top-0 left-0 w-full h-full " style={{pointerEvents:"auto"}}>
+          <Excalidraw
+            onChange={handleChange}
+            excalidrawAPI={(api) => setExcalidrawAPI(api)}
+            initialData={{
+              appState: {
+                viewBackgroundColor: "transparent",
+                currentItemStrokeColor: "#000000",
+                currentItemBackgroundColor: "transparent",
+                scrollX: 0,
+                scrollY: 0,
+                theme: "light",
+              },
+            }}
+          />
+        </div>
+        </div>
       </div>
     ),
     [onLoadPageSuccess]
@@ -57,12 +136,12 @@ const PDFViewer = ({ url }: { url: string }) => {
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
             loading={<Loading message="Loading PDF..." />}
             error={<ErrorComponent message="Failed to load PDF" />}
-            className={'w-[100vw] flex items-center justify-center'}
+            className={"w-[100vw] flex items-center justify-center"}
           >
             {numPages && (
               <List
                 ref={listRef}
-                width={650}
+                width={window.innerWidth}
                 height={window.innerHeight}
                 rowCount={numPages}
                 rowHeight={pageHeight} // Dynamically updated
@@ -100,7 +179,11 @@ const PdfViewer = () => {
 
   return (
     <div className="h-screen w-full overflow-auto bg-gray-200">
-      {pdfData ? <PDFViewer url={pdfData} /> : <Loading message="Fetching PDF..." />}
+      {pdfData ? (
+        <PDFViewer url={pdfData} />
+      ) : (
+        <Loading message="Fetching PDF..." />
+      )}
     </div>
   );
 };
