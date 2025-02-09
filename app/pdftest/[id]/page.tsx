@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
+import { List } from "react-virtualized";
 import { getPdfById } from "@/db/pdf/docs";
-import PDFPageContainer from "@/components/pdftest/PDFPageContainer";
 import { useParams } from "next/navigation";
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs`;
@@ -22,46 +22,52 @@ const ErrorComponent = ({ message }: { message: string }) => (
 
 const PDFViewer = ({ url }: { url: string }) => {
   const [numPages, setNumPages] = useState<number | null>(null);
-  const [zoom, setZoom] = useState<number>(1);
-  const [fitToWidth, setFitToWidth] = useState<boolean>(true);
-  const [currentPage, setCurrentPage] = useState<number>(1); // Added missing state
-  const [viewMode, setViewMode] = useState<string>("single"); // Placeholder
-  const [isExpanded, setIsExpanded] = useState<boolean>(false); // Placeholder
+  const [pageHeight, setPageHeight] = useState<number>(900); // Default height
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<any>(null);
 
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-  };
+  // Callback for setting dynamic height
+  const onLoadPageSuccess = useCallback((page) => {
+    const viewport = page.getViewport({ scale: 1 });
+    setPageHeight(viewport.height + 10); // Add spacing
+  }, []);
+
+  const renderRow = useCallback(
+    ({ index, key, style }) => (
+      <div key={key} style={{ ...style, display: "flex", justifyContent: "center", paddingBottom: "10px" }}>
+        <Page
+          pageNumber={index + 1}
+          width={ 600}
+          renderAnnotationLayer={false}
+          renderTextLayer={false}
+          onLoadSuccess={onLoadPageSuccess} // Capture dynamic height
+        />
+      </div>
+    ),
+    [onLoadPageSuccess]
+  );
 
   return (
-    <div className="flex h-full max-w-full scrollbar-hidden">
+    <div className="flex h-full max-w-full overflow-hidden">
       <div className="flex-1 flex flex-col">
-        <div ref={containerRef} className="flex-1 p-4 overflow-auto scrollbar-hidden relative">
+        <div ref={containerRef} className="flex-1 p-4 overflow-auto relative">
           <Document
             file={url}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
             loading={<Loading message="Loading PDF..." />}
             error={<ErrorComponent message="Failed to load PDF" />}
           >
-            <div className="flex flex-col gap-4 items-center">
-              {numPages &&
-                Array.from({ length: numPages }, (_, index) => (
-                  // <PDFPageContainer
-                  //   key={index + 1}
-                  //   pageNumber={index + 1}
-                  //   isVisible={index + 1 === currentPage}
-                  //   zoom={zoom}
-                  //   setZoom={setZoom}
-                  //   pageWidth={containerRef?.current?.offsetWidth || 800}
-                  //   viewMode={viewMode}
-                  //   fitToWidth={fitToWidth}
-                  //   setFitToWidth={setFitToWidth}
-                  //   isExpanded={isExpanded}
-                  //   onPageInView={handlePageChange}
-                  // />
-                  <Page pageNumber={index}/>
-                ))}
-            </div>
+            {numPages && (
+              <List
+                ref={listRef}
+                width={containerRef?.current?.offsetWidth || 650}
+                height={window.innerHeight}
+                rowCount={numPages}
+                rowHeight={pageHeight} // Dynamically updated
+                rowRenderer={renderRow}
+                overscanRowCount={2}
+              />
+            )}
           </Document>
         </div>
       </div>
@@ -74,7 +80,7 @@ const PdfViewer = () => {
   const { id } = useParams<{ id: string }>();
 
   useEffect(() => {
-    const handleFetchPdf = async (pdfId: string) => {
+    const fetchPdf = async (pdfId: string) => {
       try {
         const pdf = await getPdfById(pdfId);
         if (pdf?.base64) {
@@ -86,12 +92,12 @@ const PdfViewer = () => {
     };
 
     if (id) {
-      handleFetchPdf(id);
+      fetchPdf(id);
     }
   }, [id]);
 
   return (
-    <div className="h-screen w-full overflow-auto bg-slate-400">
+    <div className="h-screen w-full overflow-auto bg-gray-200">
       {pdfData ? <PDFViewer url={pdfData} /> : <Loading message="Fetching PDF..." />}
     </div>
   );
