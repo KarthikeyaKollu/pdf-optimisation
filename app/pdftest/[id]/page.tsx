@@ -34,7 +34,7 @@ const PDFViewer = ({ url }: { url: string }) => {
 
   const renderRow = useCallback(
     ({ index, key, style }) => (
-      <div key={key} style={{ ...style, display: "flex", justifyContent: "center", paddingBottom: "10px" }}>
+      <div key={key} style={{ ...style, display: "flex", justifyContent: "center", paddingBottom: "10px" }} className="relative">
         <Page
           pageNumber={index + 1}
           width={ 600}
@@ -42,6 +42,7 @@ const PDFViewer = ({ url }: { url: string }) => {
           renderTextLayer={false}
           onLoadSuccess={onLoadPageSuccess} // Capture dynamic height
         />
+       
       </div>
     ),
     [onLoadPageSuccess]
@@ -50,17 +51,18 @@ const PDFViewer = ({ url }: { url: string }) => {
   return (
     <div className="flex h-full max-w-full overflow-hidden">
       <div className="flex-1 flex flex-col">
-        <div ref={containerRef} className="flex-1 p-4 overflow-auto relative">
+        <div ref={containerRef} className="flex-1 p-4 overflow-auto relative ">
           <Document
             file={url}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
             loading={<Loading message="Loading PDF..." />}
             error={<ErrorComponent message="Failed to load PDF" />}
+            className={'w-[100vw] flex items-center justify-center'}
           >
             {numPages && (
               <List
                 ref={listRef}
-                width={containerRef?.current?.offsetWidth || 650}
+                width={650}
                 height={window.innerHeight}
                 rowCount={numPages}
                 rowHeight={pageHeight} // Dynamically updated
